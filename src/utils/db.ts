@@ -536,6 +536,32 @@ export const DbService = {
     const client = getSupabase();
     if (client) {
       try {
+        // Fetch all vehicles first to find user-specific ones
+        const { data, error: fetchErr } = await client
+          .from('vehicles')
+          .select('id, model');
+          
+        if (!fetchErr && data) {
+          const userVehicleIds = data
+            .filter((item: any) => {
+              const model = item.model || '';
+              const match = model.match(/\[u:([\w-]+)\]/);
+              return match && match[1].toLowerCase() === normUser;
+            })
+            .map((item: any) => item.id);
+
+          // Find those that are in Supabase but NOT in the new list to be saved
+          const newIds = new Set(processedList.map(v => v.id));
+          const idsToDelete = userVehicleIds.filter(id => !newIds.has(id));
+
+          if (idsToDelete.length > 0) {
+            await client
+              .from('vehicles')
+              .delete()
+              .in('id', idsToDelete);
+          }
+        }
+
         const dbItems = processedList.map(v => ({
           id: v.id,
           name: v.name,
