@@ -1,0 +1,152 @@
+[
+  {
+    "id": "refill_civic_1",
+    "date": "2026-01-10",
+    "odometer": 24500,
+    "liters": 42.5,
+    "amount_paid": 4250,
+    "notes": "Initial Civic Full Refuel [v:vehicle_1]",
+    "is_partial": false,
+    "vehicle_id": "vehicle_1"
+  },
+  {
+    "id": "refill_civic_2",
+    "date": "2026-02-05",
+    "odometer": 25010,
+    "liters": 40.8,
+    "amount_paid": 4080,
+    "notes": "Office commute tank fill [v:vehicle_1]",
+    "is_partial": false,
+    "vehicle_id": "vehicle_1"
+  },
+  {
+    "id": "refill_civic_3",
+    "date": "2026-03-01",
+    "odometer": 25520,
+    "liters": 41.2,
+    "amount_paid": 4120,
+    "notes": "Standard refuel run [v:vehicle_1]",
+    "is_partial": false,
+    "vehicle_id": "vehicle_1"
+  },
+  {
+    "id": "refill_civic_4",
+    "date": "2026-04-12",
+    "odometer": 26030,
+    "liters": 43.1,
+    "amount_paid": 4350,
+    "notes": "Supermarket and office runs [v:vehicle_1]",
+    "is_partial": false,
+    "vehicle_id": "vehicle_1"
+  },
+  {
+    "id": "refill_civic_5",
+    "date": "2026-05-18",
+    "odometer": 26550,
+    "liters": 41.5,
+    "amount_paid": 4200,
+    "notes": "Civic highway drive top-up [v:vehicle_1]",
+    "is_partial": false,
+    "vehicle_id": "vehicle_1"
+  },
+  {
+    "id": "refill_civic_6",
+    "date": "2026-06-20",
+    "odometer": 27070,
+    "liters": 42.0,
+    "amount_paid": 4240,
+    "notes": "End of month gas fill [v:vehicle_1]",
+    "is_partial": false,
+    "vehicle_id": "vehicle_1"
+  },
+  {
+    "id": "refill_mt_1",
+    "date": "2026-01-15",
+    "odometer": 8200,
+    "liters": 8.5,
+    "amount_paid": 850,
+    "notes": "MT15 bike fillup [v:vehicle_2]",
+    "is_partial": false,
+    "vehicle_id": "vehicle_2"
+  },
+  {
+    "id": "refill_mt_2",
+    "date": "2026-02-12",
+    "odometer": 8530,
+    "liters": 8.0,
+    "amount_paid": 800,
+    "notes": "University classes run [v:vehicle_2]",
+    "is_partial": false,
+    "vehicle_id": "vehicle_2"
+  },
+  {
+    "id": "refill_mt_3",
+    "date": "2026-03-20",
+    "odometer": 8850,
+    "liters": 8.2,
+    "amount_paid": 820,
+    "notes": "Weekend ride refuel [v:vehicle_2]",
+    "is_partial": false,
+    "vehicle_id": "vehicle_2"
+  },
+  {
+    "id": "refill_mt_4",
+    "date": "2026-05-01",
+    "odometer": 9180,
+    "liters": 8.1,
+    "amount_paid": 810,
+    "notes": "Summer bike refuel [v:vehicle_2]",
+    "is_partial": false,
+    "vehicle_id": "vehicle_2"
+  },
+  {
+    "id": "refill_mt_5",
+    "date": "2026-06-15",
+    "odometer": 9510,
+    "liters": 8.3,
+    "amount_paid": 830,
+    "notes": "Local errand commutes [v:vehicle_2]",
+    "is_partial": false,
+    "vehicle_id": "vehicle_2"
+  },
+  {
+    "id": "refill_nexon_1",
+    "date": "2026-01-20",
+    "odometer": 12400,
+    "liters": 50.0,
+    "amount_paid": 4500,
+    "notes": "Nexon CNG fill [v:vehicle_3]",
+    "is_partial": false,
+    "vehicle_id": "vehicle_3"
+  },
+  {
+    "id": "refill_nexon_2",
+    "date": "2026-03-05",
+    "odometer": 13300,
+    "liters": 48.0,
+    "amount_paid": 4320,
+    "notes": "Outstation site visit refuel [v:vehicle_3]",
+    "is_partial": false,
+    "vehicle_id": "vehicle_3"
+  },
+  {
+    "id": "refill_nexon_3",
+    "date": "2026-04-28",
+    "odometer": 14150,
+    "liters": 49.5,
+    "amount_paid": 4450,
+    "notes": "Business logistics run [v:vehicle_3]",
+    "is_partial": false,
+    "vehicle_id": "vehicle_3"
+  },
+  {
+    "id": "refill_nexon_4",
+    "date": "2026-06-18",
+    "odometer": 15020,
+    "liters": 51.0,
+    "amount_paid": 4590,
+    "notes": "Tata Nexon monthly topup [v:vehicle_3]",
+    "is_partial": false,
+    "vehicle_id": "vehicle_3"
+  }
+]

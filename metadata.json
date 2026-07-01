@@ -1,0 +1,8 @@
+{
+  "name": "Fuel Expense Tracker",
+  "description": "A personal, highly-polished Fuel Expense Tracker and Mileage Analytics console, custom optimized for mobile viewports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
