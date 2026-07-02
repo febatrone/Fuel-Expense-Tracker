@@ -212,6 +212,24 @@ export const DbService = {
               username: entryUser
             };
           });
+
+          // Sync to LocalStorage to prevent stale cache/re-importing deleted records
+          const normalizedUsername = username.trim().toLowerCase();
+          const userScope = allEntries.filter(entry => {
+            const entryUser = (entry as any).username || '';
+            return entryUser.toLowerCase() === normalizedUsername;
+          });
+          const localEntriesToSave = userScope.map(entry => {
+            const vId = entry.vehicle_id || 'vehicle_1';
+            const dbNotes = entry.notes 
+              ? `${entry.notes} [v:${vId}] [u:${username}]` 
+              : `[v:${vId}] [u:${username}]`;
+            return {
+              ...entry,
+              notes: dbNotes
+            };
+          });
+          saveLocalEntries(localEntriesToSave, username);
         }
       } catch (err) {
         console.warn('Supabase fetch failed, falling back to local records:', err);
@@ -273,7 +291,18 @@ export const DbService = {
           .single();
 
         if (error) throw error;
-        if (data) return { ...newEntry, created_at: data.created_at };
+        if (data) {
+          const entryWithCreatedAt = { ...newEntry, created_at: data.created_at };
+          // Always keep LocalStorage in sync
+          const entries = getLocalEntries(username);
+          const localToSave = {
+            ...entryWithCreatedAt,
+            notes: dbNotes
+          };
+          entries.push(localToSave);
+          saveLocalEntries(entries, username);
+          return entryWithCreatedAt;
+        }
       } catch (err) {
         console.warn('Supabase add failed, storing locally instead:', err);
       }
@@ -327,6 +356,17 @@ export const DbService = {
           .eq('id', finalEntry.id);
 
         if (error) throw error;
+        
+        // Always keep LocalStorage in sync
+        const entries = getLocalEntries(username);
+        const index = entries.findIndex(e => e.id === finalEntry.id);
+        if (index !== -1) {
+          entries[index] = {
+            ...finalEntry,
+            notes: dbNotes
+          };
+          saveLocalEntries(entries, username);
+        }
         return finalEntry;
       } catch (err) {
         console.warn('Supabase update failed, updating locally instead:', err);
@@ -359,13 +399,12 @@ export const DbService = {
           .eq('id', id);
 
         if (error) throw error;
-        return;
       } catch (err) {
         console.warn('Supabase delete failed, deleting locally instead:', err);
       }
     }
 
-    // Fallback: LocalStorage
+    // Fallback/Local Sync: LocalStorage
     const entries = getLocalEntries(username);
     const filtered = entries.filter(e => e.id !== id);
     saveLocalEntries(filtered, username);
@@ -472,7 +511,7 @@ export const DbService = {
           } else {
             throw error;
           }
-        } else if (data && data.length > 0) {
+        } else if (data) {
           allVehicles = data.map((item: any) => {
             const rawModel = item.model || '';
             const uMatch = rawModel.match(/\[u:([\w-]+)\]/);
@@ -487,6 +526,24 @@ export const DbService = {
               username: entryUser
             };
           });
+
+          // Sync to LocalStorage to prevent stale cache/re-importing deleted records
+          const normalizedUsername = username.trim().toLowerCase();
+          const filteredVehicles = allVehicles.filter(v => {
+            const vUser = (v.username || '').toLowerCase();
+            return vUser === normalizedUsername;
+          });
+          const processedList = filteredVehicles.map(v => {
+            const cleanModel = (v.model || '').replace(/\[u:([\w-]+)\]/g, '').trim();
+            return {
+              ...v,
+              model: `${cleanModel} [u:${username}]`,
+              username
+            };
+          });
+          const normUser = username.trim().toLowerCase();
+          const userKey = `fuel_tracker_vehicles_${normUser}`;
+          localStorage.setItem(userKey, JSON.stringify(processedList));
         }
       } catch (err) {
         console.warn('Supabase vehicles fetch failed, falling back to local vehicles:', err);
@@ -731,6 +788,21 @@ export const DbService = {
               username: entryUser
             } as any;
           });
+
+          // Sync to LocalStorage to prevent stale cache/re-importing deleted records
+          const normalizedUsername = username.trim().toLowerCase();
+          const filtered = allLogs.filter(log => {
+            const logUser = (log as any).username || '';
+            return logUser.toLowerCase() === normalizedUsername;
+          });
+          const processedLogs = filtered.map(log => {
+            const cleanNotes = (log.notes || '').replace(/\[u:([\w-]+)\]/g, '').trim();
+            return {
+              ...log,
+              notes: `${cleanNotes} [u:${username}]`
+            };
+          });
+          localStorage.setItem(`fuel_tracker_daily_runs_${username}`, JSON.stringify(processedLogs));
         }
       } catch (err) {
         console.warn('Supabase daily runs fetch failed, falling back to local storage:', err);
@@ -780,6 +852,32 @@ export const DbService = {
     const client = getSupabase();
     if (client) {
       try {
+        const normUser = username.trim().toLowerCase();
+        // Fetch existing daily runs from Supabase to check for deletions
+        const { data, error: fetchErr } = await client
+          .from('daily_runs')
+          .select('id, notes');
+
+        if (!fetchErr && data) {
+          const userLogIds = data
+            .filter((item: any) => {
+              const notes = item.notes || '';
+              const match = notes.match(/\[u:([\w-]+)\]/);
+              return match && match[1].toLowerCase() === normUser;
+            })
+            .map((item: any) => item.id);
+
+          const newIds = new Set(logsList.map(l => l.id));
+          const idsToDelete = userLogIds.filter(id => !newIds.has(id));
+
+          if (idsToDelete.length > 0) {
+            await client
+              .from('daily_runs')
+              .delete()
+              .in('id', idsToDelete);
+          }
+        }
+
         const dbItems = logsList.map(log => {
           const cleanNotes = (log.notes || '').replace(/\[u:([\w-]+)\]/g, '').trim();
           return {
@@ -843,6 +941,21 @@ export const DbService = {
               username: entryUser
             } as any;
           });
+
+          // Sync to LocalStorage to prevent stale cache/re-importing deleted records
+          const normalizedUsername = username.trim().toLowerCase();
+          const filtered = allRoutes.filter(r => {
+            const rUser = (r as any).username || '';
+            return rUser.toLowerCase() === normalizedUsername;
+          });
+          const processedRoutes = filtered.map(r => {
+            const cleanName = (r.name || '').replace(/\[u:([\w-]+)\]/g, '').trim();
+            return {
+              ...r,
+              name: `${cleanName} [u:${username}]`
+            };
+          });
+          localStorage.setItem(`fuel_tracker_saved_routes_${username}`, JSON.stringify(processedRoutes));
         }
       } catch (err) {
         console.warn('Supabase saved routes fetch failed, falling back to local storage:', err);
@@ -892,6 +1005,32 @@ export const DbService = {
     const client = getSupabase();
     if (client) {
       try {
+        const normUser = username.trim().toLowerCase();
+        // Fetch existing saved routes from Supabase to check for deletions
+        const { data, error: fetchErr } = await client
+          .from('saved_routes')
+          .select('id, name');
+
+        if (!fetchErr && data) {
+          const userRouteIds = data
+            .filter((item: any) => {
+              const name = item.name || '';
+              const match = name.match(/\[u:([\w-]+)\]/);
+              return match && match[1].toLowerCase() === normUser;
+            })
+            .map((item: any) => item.id);
+
+          const newIds = new Set(routesList.map(r => r.id));
+          const idsToDelete = userRouteIds.filter(id => !newIds.has(id));
+
+          if (idsToDelete.length > 0) {
+            await client
+              .from('saved_routes')
+              .delete()
+              .in('id', idsToDelete);
+          }
+        }
+
         const dbItems = routesList.map(r => {
           const cleanName = (r.name || '').replace(/\[u:([\w-]+)\]/g, '').trim();
           return {
