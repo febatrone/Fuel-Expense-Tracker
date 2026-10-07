@@ -2,16 +2,41 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { FuelEntry, DailyRunLog, SavedRoute } from '../types';
 
 // Read configuration from Vite environment variables
+const apiUrl = ((import.meta as any).env.VITE_API_URL as string) || '';
 const supabaseUrl = ((import.meta as any).env.VITE_SUPABASE_URL as string) || '';
 const supabaseAnonKey = ((import.meta as any).env.VITE_SUPABASE_ANON_KEY as string) || '';
 
+export const isExpressApiConfigured = !!apiUrl;
 export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
 
 // Log configuration status
-if (isSupabaseConfigured) {
+if (isExpressApiConfigured) {
+  console.log(`🔌 Fuel Tracker: Connecting to Express PostgreSQL Backend (${apiUrl})...`);
+} else if (isSupabaseConfigured) {
   console.log('🔌 Fuel Tracker: Connecting to Supabase Cloud...');
 } else {
   console.log('💾 Fuel Tracker: Using LocalStorage for storage (standalone offline mode).');
+}
+
+// Helper for fetch with timeout (handles Render free tier cold-starts gracefully)
+export async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 12000): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
+}
+
+// Background Keep-Alive Ping for Render Free Tier (pings every 5 minutes while active)
+if (isExpressApiConfigured && typeof window !== 'undefined') {
+  setInterval(() => {
+    fetchWithTimeout(`${apiUrl}/api/ping`, {}, 5000).catch(() => {});
+  }, 5 * 60 * 1000);
 }
 
 // Lazy initialization of Supabase client to prevent startup crash if keys are missing
@@ -176,6 +201,19 @@ export const DbService = {
    * Fetches all fuel records (sorted chronologically) matching specific username
    */
   async getEntries(username: string): Promise<FuelEntry[]> {
+    if (apiUrl) {
+      try {
+        const res = await fetchWithTimeout(`${apiUrl}/api/fuel-entries?username=${encodeURIComponent(username)}`, {}, 10000);
+        if (res.ok) {
+          const data = await res.json();
+          saveLocalEntries(data, username);
+          return data;
+        }
+      } catch (err) {
+        console.warn('Express REST API fetch failed or timed out (Render free tier cold start), falling back to local cached entries:', err);
+      }
+    }
+
     const client = getSupabase();
     let allEntries: FuelEntry[] = [];
     if (client) {
@@ -243,22 +281,42 @@ export const DbService = {
     return allEntries.filter(entry => {
       const entryUser = (entry as any).username || '';
       if (!entryUser) {
-        // Keep unassigned entries as shared or associate with primary user
         return true;
       }
       return entryUser.toLowerCase() === normalizedUsername;
     });
   },
 
-  /**
-   * Adds a new entry and links to username
-   */
   async addEntry(entryData: Omit<FuelEntry, 'id' | 'price_per_liter' | 'created_at'>, username: string): Promise<FuelEntry> {
     const calculatedPrice = Number((entryData.amount_paid / entryData.liters).toFixed(3));
     const vId = entryData.vehicle_id || 'vehicle_1';
     
     const rawNotes = entryData.notes ? entryData.notes.trim() : '';
     const cleanNotes = rawNotes.replace(/\[v:([\w-]+)\]/g, '').replace(/\[u:([\w-]+)\]/g, '').trim();
+
+    if (apiUrl) {
+      try {
+        const res = await fetch(`${apiUrl}/api/fuel-entries`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...entryData,
+            notes: cleanNotes,
+            vehicle_id: vId,
+            username
+          })
+        });
+        if (res.ok) {
+          const created = await res.json();
+          const entries = getLocalEntries(username);
+          entries.push(created);
+          saveLocalEntries(entries, username);
+          return created;
+        }
+      } catch (err) {
+        console.warn('Express API addEntry failed, falling back:', err);
+      }
+    }
     const dbNotes = cleanNotes 
       ? `${cleanNotes} [v:${vId}] [u:${username}]` 
       : `[v:${vId}] [u:${username}]`;

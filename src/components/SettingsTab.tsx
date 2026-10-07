@@ -1,9 +1,9 @@
 import React, { useRef, useState } from 'react';
 import { FuelEntry, CalculatedEntry, Vehicle } from '../types';
-import { isSupabaseConfigured, DbService, getLocalEntries, getLocalVehicles } from '../utils/db';
+import { isExpressApiConfigured, isSupabaseConfigured, DbService, getLocalEntries, getLocalVehicles } from '../utils/db';
 import { getAdminConfig, removeUserAccount, getAllUsers, registerUser, UserAccount } from '../utils/auth';
 import { hashPassword } from '../utils/crypto';
-import { Download, Upload, ShieldAlert, CheckCircle, Database, HelpCircle, FileSpreadsheet, Copy, Code, HelpCircle as HelpIcon, Radio, Wrench, Fuel, Plus, Trash2, Users, UserPlus, Lock, User, UserMinus, ChevronRight, Sparkles } from 'lucide-react';
+import { Download, Upload, ShieldAlert, CheckCircle, Database, HelpCircle, FileSpreadsheet, Copy, Code, HelpCircle as HelpIcon, Radio, Wrench, Fuel, Plus, Trash2, Users, UserPlus, Lock, User, UserMinus, ChevronRight, Sparkles, Printer } from 'lucide-react';
 import { motion } from 'motion/react';
 import { ConfirmModal } from './ConfirmModal';
 
@@ -163,6 +163,145 @@ export default function SettingsTab({
     }
   };
 
+  // 2.5 Printable PDF Summary Report Generator
+  const handlePrintPDFReport = () => {
+    try {
+      const totalCost = calculatedEntries.reduce((sum, e) => sum + e.amount_paid, 0);
+      const totalLiters = calculatedEntries.reduce((sum, e) => sum + e.liters, 0);
+      const validMileageEntries = calculatedEntries.filter(e => e.mileage !== undefined);
+      const avgMileage = validMileageEntries.length > 0
+        ? validMileageEntries.reduce((sum, e) => sum + (e.mileage || 0), 0) / validMileageEntries.length
+        : 0;
+      const totalDistance = calculatedEntries.reduce((sum, e) => sum + (e.distanceTravelled || 0), 0);
+      const costPerKm = totalDistance > 0 ? totalCost / totalDistance : 0;
+      const avgPricePerLiter = totalLiters > 0 ? totalCost / totalLiters : 0;
+
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        setErrorMsg('Please allow popups to generate and print PDF reports.');
+        return;
+      }
+
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Fuel Expense & Mileage Report - ${username}</title>
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; color: #1e293b; background: #fff; }
+            h1 { color: #0f172a; margin-bottom: 5px; font-size: 24px; }
+            .subtitle { color: #64748b; font-size: 13px; margin-bottom: 25px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
+            .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px; }
+            .metric-card { background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 10px; }
+            .metric-label { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: bold; }
+            .metric-value { font-size: 20px; font-weight: bold; color: #0f172a; margin-top: 5px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
+            th { background: #0f172a; color: #fff; text-align: left; padding: 10px; font-weight: 600; }
+            td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
+            tr:nth-child(even) { background: #f8fafc; }
+            .footer { margin-top: 40px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 15px; }
+            @media print {
+              body { padding: 0; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <h1>⛽ Fuel Expense Tracker Summary</h1>
+              <div class="subtitle">Generated for Driver Profile: <strong>${username}</strong> | Date: ${new Date().toLocaleDateString()}</div>
+            </div>
+            <button onclick="window.print()" class="no-print" style="padding: 8px 16px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">Print / Save PDF</button>
+          </div>
+
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <div class="metric-label">Total Refills</div>
+              <div class="metric-value">${calculatedEntries.length}</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Total Fuel Cost</div>
+              <div class="metric-value">₹${totalCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Total Liters</div>
+              <div class="metric-value">${totalLiters.toFixed(2)} L</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Avg Mileage</div>
+              <div class="metric-value">${avgMileage.toFixed(2)} km/L</div>
+            </div>
+          </div>
+
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <div class="metric-label">Total Distance</div>
+              <div class="metric-value">${totalDistance.toLocaleString()} km</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Cost Per KM</div>
+              <div class="metric-value">₹${costPerKm.toFixed(2)}/km</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Avg Price / Liter</div>
+              <div class="metric-value">₹${avgPricePerLiter.toFixed(2)}/L</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Active Vehicles</div>
+              <div class="metric-value">${vehicles.length}</div>
+            </div>
+          </div>
+
+          <h2>Fuel Fill-Up Log Details</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Odometer (KM)</th>
+                <th>Liters</th>
+                <th>Amount (₹)</th>
+                <th>Price/L (₹)</th>
+                <th>Distance (KM)</th>
+                <th>Mileage (KM/L)</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${calculatedEntries.map(e => `
+                <tr>
+                  <td>${e.date}</td>
+                  <td>${e.odometer.toLocaleString()}</td>
+                  <td>${e.liters.toFixed(2)}</td>
+                  <td>₹${e.amount_paid.toFixed(2)}</td>
+                  <td>₹${e.price_per_liter.toFixed(2)}</td>
+                  <td>${e.distanceTravelled !== undefined ? e.distanceTravelled + ' km' : '-'}</td>
+                  <td>${e.mileage !== undefined ? e.mileage.toFixed(2) + ' km/L' : '-'}</td>
+                  <td>${e.notes || '-'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <div class="footer">
+            Fuel Expense Tracker Consolidated Report • Generated via Netlify & Express PostgreSQL System
+          </div>
+
+          <script>
+            window.onload = function() {
+              setTimeout(function() { window.print(); }, 500);
+            };
+          </script>
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+      setSuccessMsg('Opened Printable PDF Report dialog window.');
+    } catch (e) {
+      setErrorMsg('Failed to generate printable PDF report.');
+    }
+  };
+
   // 3. Import JSON backup database merges
   const handleImportJSONClick = () => {
     fileInputRef.current?.click();
@@ -300,7 +439,7 @@ export default function SettingsTab({
         </div>
       )}
 
-      {/* SECTION 1: STORAGE CONTEXT (SUPABASE CLOUD CODES) */}
+      {/* SECTION 1: STORAGE CONTEXT (RENDER EXPRESS + POSTGRESQL) */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -308,25 +447,25 @@ export default function SettingsTab({
             <h3 className="font-bold text-white text-sm">Database Engine</h3>
           </div>
           <span className={`text-[10px] uppercase font-mono px-2.5 py-1 rounded-full flex items-center gap-1.5 font-bold ${
-            isSupabaseConfigured
+            isExpressApiConfigured
               ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
               : 'bg-orange-500/10 border border-orange-500/20 text-orange-400'
           }`}>
             <Radio className="w-3.5 h-3.5 animate-pulse" />
-            {isSupabaseConfigured ? 'Supabase Connected' : 'Offline LocalStorage'}
+            {isExpressApiConfigured ? 'Render PostgreSQL Connected' : 'Offline LocalStorage'}
           </span>
         </div>
 
         <p className="text-xs text-slate-400 leading-relaxed font-sans">
-          {isSupabaseConfigured
-            ? 'The app is successfully connected to your Supabase Cloud cluster. All data operations are securely synced directly in real-time.'
-            : 'Operational in client-side Sandbox mode. Data is stored in your secure local web storage. To build a cloud database backend, click copy SQL schema and supply the environment keys.'}
+          {isExpressApiConfigured
+            ? 'The app is successfully connected to your Express + PostgreSQL REST API backend hosted on Render. All fuel records, vehicles, and daily runs are stored directly in your PostgreSQL database.'
+            : 'Operational in client-side Sandbox mode. Data is stored in your secure local web storage. To connect to your Render PostgreSQL backend, set VITE_API_URL in your Netlify environment variables.'}
         </p>
 
         {/* SQL Script Accordion style button */}
         <div className="bg-slate-950 border border-slate-850 rounded-2xl p-4.5 space-y-3 font-mono text-xs">
           <div className="flex items-center justify-between text-cyan-400">
-            <span className="font-bold font-sans tracking-wide">// Supabase table SQL setup:</span>
+            <span className="font-bold font-sans tracking-wide">// Render PostgreSQL DDL setup (server/schema.sql):</span>
             <button
               onClick={handleCopySQL}
               className="p-1.5 bg-slate-900 hover:bg-slate-850 text-slate-400 hover:text-white rounded-lg transition-colors flex items-center gap-1 cursor-pointer text-[11px] font-sans"
@@ -336,7 +475,7 @@ export default function SettingsTab({
             </button>
           </div>
           <p className="text-[10px] text-slate-500 leading-normal font-sans">
-            Paste this setup script directly inside your Supabase SQL editor to instantiate the structured <code>fuel_entries</code> table with native price-calculation schemas.
+            Paste this DDL setup script inside your Render PostgreSQL database query editor to instantiate the structured <code>vehicles</code>, <code>fuel_entries</code>, <code>daily_runs</code>, and <code>saved_routes</code> tables.
           </p>
         </div>
       </div>
@@ -512,6 +651,18 @@ export default function SettingsTab({
         </p>
 
         <div className="grid grid-cols-1 gap-2.5">
+          {/* Printable PDF Summary Report */}
+          <button
+            onClick={handlePrintPDFReport}
+            className="w-full h-12 bg-gradient-to-r from-slate-950 to-slate-900 hover:from-slate-900 hover:to-slate-850 text-white font-medium rounded-xl text-xs transition-all border border-cyan-500/30 flex items-center justify-between px-4 cursor-pointer shadow-lg shadow-cyan-950/20"
+          >
+            <span className="flex items-center gap-2">
+              <Printer className="w-4 h-4 text-cyan-400" />
+              <span className="font-semibold text-cyan-300">Generate Printable PDF Summary Report</span>
+            </span>
+            <Printer className="w-4 h-4 text-cyan-400" />
+          </button>
+
           {/* Download CSV */}
           <button
             onClick={handleExportCSV}
@@ -611,167 +762,41 @@ export default function SettingsTab({
         </div>
       </div>
 
-      {/* SECTION 3.5: ADMIN CONTROL PANEL (USER & DRIVER MANAGEMENT) */}
+      {/* SECTION 3.5: SUPER ADMIN ACCESS CONTROL */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4">
         <div id="admin-user-management" className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-cyan-400" />
-            <h3 className="font-bold text-white text-sm">Admin Control Panel (Drivers & Users)</h3>
+            <Lock className="w-5 h-5 text-cyan-400" />
+            <h3 className="font-bold text-white text-sm">Super Admin Security & Access Control</h3>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setIsCreateUserOpen(!isCreateUserOpen);
-              setCreateUserError('');
-              setCreateUserSuccess('');
-            }}
-            className="text-cyan-400 hover:text-cyan-300 transition-colors flex items-center gap-1.5 text-[10px] uppercase font-bold bg-cyan-400/10 hover:bg-cyan-400/20 px-3 py-1.5 rounded-xl cursor-pointer select-none"
-          >
-            <UserPlus className="w-3.5 h-3.5" />
-            <span>{isCreateUserOpen ? 'Close Form' : 'Register Driver'}</span>
-          </button>
+          <span className="text-[10px] uppercase font-mono px-2.5 py-1 rounded-full flex items-center gap-1.5 font-bold bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+            <User className="w-3.5 h-3.5" />
+            Exclusive Super Admin Mode
+          </span>
         </div>
 
         <p className="text-xs text-slate-400 leading-relaxed font-sans font-medium">
-          Manage all driver profiles registered in the system. Authorized administrators can view user metrics, add new drivers, or delete driver accounts with all of their records.
+          System is configured for exclusive single-tenant Super Admin operation. All vehicle profiles, fuel entries, daily logs, and database metrics are strictly managed under your primary Super Admin account (<span className="text-cyan-300 font-bold">{username}</span>).
         </p>
 
-        {/* Expandable User Registration section */}
-        {isCreateUserOpen && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            className="p-4 bg-slate-950 border border-slate-850 rounded-2xl space-y-3.5 overflow-hidden"
-          >
-            <div className="flex items-center justify-between border-b border-slate-850/60 pb-2">
-              <span className="text-xs font-bold text-cyan-400 font-mono">Register New Driver Profile</span>
-              <span className="text-[9px] text-slate-500 uppercase bg-slate-900 px-1.5 py-0.5 rounded font-bold font-mono">Secure SHA-256 Credentials</span>
-            </div>
-
-            {createUserError && (
-              <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl text-xs flex items-center gap-2 font-sans">
-                <ShieldAlert className="w-4 h-4 shrink-0" />
-                <span>{createUserError}</span>
-              </div>
-            )}
-
-            {createUserSuccess && (
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-xs flex items-center gap-2 font-sans">
-                <CheckCircle className="w-4 h-4 shrink-0" />
-                <span>{createUserSuccess}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleRegisterUserFromAdmin} className="space-y-3 font-sans">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[10px] text-slate-400 block mb-1 font-semibold uppercase tracking-wider font-mono">Driver Username</label>
-                  <input
-                    type="text"
-                    required
-                    value={newUsername}
-                    onChange={(e) => setNewUsername(e.target.value)}
-                    placeholder="e.g. alex_driver_2"
-                    className="w-full h-10 px-3 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-slate-400 block mb-1 font-semibold uppercase tracking-wider font-mono">Secure Password</label>
-                  <input
-                    type="password"
-                    required
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Minimum 6 characters"
-                    className="w-full h-10 px-3 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors"
-                  />
-                </div>
-              </div>
-              <button
-                type="submit"
-                className="w-full h-10 bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-700 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <UserPlus className="w-4 h-4" />
-                Create Driver Profile
-              </button>
-            </form>
-          </motion.div>
-        )}
-
-        {/* Users List Grid */}
-        <div className="space-y-2 bg-slate-950 p-3 rounded-2xl border border-slate-850">
-          <div className="flex items-center justify-between pb-1.5 border-b border-slate-905/60">
-            <span className="text-[10px] text-slate-400 uppercase font-mono tracking-wider font-semibold">Active Profiles / Drivers ({allUsers.length})</span>
-            <span className="text-[9px] text-slate-500 font-mono uppercase font-bold">Metrics Scoped</span>
+        <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 space-y-3 font-sans">
+          <div className="flex items-center justify-between text-xs border-b border-slate-900 pb-2">
+            <span className="text-slate-400 font-mono text-[10px] uppercase font-bold">Active Security Status</span>
+            <span className="text-emerald-400 font-semibold text-[11px] flex items-center gap-1">
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+              Protected & Authenticated
+            </span>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-0.5 scrollbar-thin">
-            {allUsers.map((userGroup) => {
-              const isCurrentUser = userGroup.username.toLowerCase() === username.toLowerCase();
-              
-              // Count vehicles and entries for visual richness
-              const entryCount = getLocalEntries(userGroup.username).length;
-              const vehicleCount = getLocalVehicles(userGroup.username).length;
-
-              // Check if user is from Vite env vars
-              const isEnvClass = !localStorage.getItem('fuel_tracker_bypass_env_creds') && 
-                (import.meta as any).env.VITE_ADMIN_USERNAME && 
-                userGroup.username.toLowerCase() === ((import.meta as any).env.VITE_ADMIN_USERNAME as string).toLowerCase();
-
-              return (
-                <div
-                  key={userGroup.username}
-                  className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
-                    isCurrentUser
-                      ? 'bg-slate-900 border-cyan-500/20 text-white'
-                      : 'bg-slate-900/60 border-slate-850 text-slate-300 hover:bg-slate-900/95'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className={`p-2 rounded-lg shrink-0 ${
-                      isCurrentUser ? 'bg-cyan-500/10 text-cyan-400' : 'bg-slate-800 text-slate-500'
-                    }`}>
-                      <User className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-xs font-bold font-sans tracking-tight text-slate-100">{userGroup.username}</span>
-                        {isCurrentUser && (
-                          <span className="bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded-full text-[8.5px] font-mono leading-none lowercase">
-                            active driver
-                          </span>
-                        )}
-                        {isEnvClass && (
-                          <span className="bg-slate-850 border border-slate-800 text-slate-500 px-1.5 py-0.5 rounded-full text-[8.5px] font-mono leading-none flex items-center gap-1.5 lowercase">
-                            <Lock className="w-2.5 h-2.5" />
-                            Read-Only Env
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-slate-500 font-mono mt-0.5 leading-none">
-                        Garage: <span className="text-slate-400 font-bold">{vehicleCount}</span> {vehicleCount === 1 ? 'vehicle' : 'vehicles'} | Records: <span className="text-slate-400 font-bold">{entryCount}</span> {entryCount === 1 ? 'entry' : 'entries'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {!isCurrentUser && !isEnvClass ? (
-                    <button
-                      type="button"
-                      onClick={() => setUserToDelete(userGroup.username)}
-                      className="p-1.5 bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 hover:border-red-500/20 text-red-400 hover:text-red-300 rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-[10px] uppercase font-bold font-mono"
-                      title={`Delete driver account "${userGroup.username}"`}
-                    >
-                      <UserMinus className="w-3.5 h-3.5" />
-                      <span>Delete</span>
-                    </button>
-                  ) : (
-                    <span className="text-[10px] font-mono text-slate-600 italic px-2 font-semibold">
-                      {isCurrentUser ? '(Self)' : 'Protected'}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-300">
+            <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+              <span className="text-[10px] text-slate-500 block uppercase font-mono font-bold">Super Admin Profile</span>
+              <span className="text-sm font-bold text-white mt-0.5 block">{username}</span>
+            </div>
+            <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+              <span className="text-[10px] text-slate-500 block uppercase font-mono font-bold">Access Level</span>
+              <span className="text-sm font-bold text-cyan-400 mt-0.5 block">Full System Authority</span>
+            </div>
           </div>
         </div>
       </div>

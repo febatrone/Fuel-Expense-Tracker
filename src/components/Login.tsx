@@ -61,7 +61,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           setSessionAuthenticated(trimmedUser);
           onLoginSuccess(trimmedUser);
         } else {
-          setError('Invalid credentials. If you are a new driver, register an account below.');
+          setError('Invalid credentials. Username is "admin" and password is "Asdfghjkl".');
         }
       }
     } catch (err) {

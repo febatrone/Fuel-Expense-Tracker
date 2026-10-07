@@ -16,56 +16,35 @@ export interface UserAccount {
   passwordHash: string;
 }
 
+export const DEFAULT_ADMIN_USERNAME = 'admin';
+export const DEFAULT_ADMIN_PASSWORD_HASH = 'd3a7fb2b836e947dd84605cc0fe6142a6163eede8a909e38c2b516f670319090';
+
 /**
- * Returns all registered users from environment variables, local admin config, and custom registers
+ * Returns the primary Super Admin account configuration
  */
 export function getAllUsers(): UserAccount[] {
-  const users: UserAccount[] = [];
-
-  // 1. Try to read from Vite environment variables first
-  const bypassEnv = localStorage.getItem('fuel_tracker_bypass_env_creds') === 'true';
-  if (!bypassEnv) {
-    const envUsername = (import.meta as any).env.VITE_ADMIN_USERNAME as string;
-    const envPasswordHash = (import.meta as any).env.VITE_ADMIN_PASSWORD_HASH as string;
-
-    if (envUsername && envPasswordHash) {
-      users.push({
-        username: envUsername,
-        passwordHash: envPasswordHash,
-      });
-    }
-  }
-
-  // 2. Try to read from primary local admin setup
+  // Check if admin changed password locally
   const storedCreds = localStorage.getItem(LOCAL_CREDENTIALS_KEY);
   if (storedCreds) {
     try {
       const config = JSON.parse(storedCreds) as AdminCredentials;
-      if (config && config.username && !users.some(u => u.username.toLowerCase() === config.username.toLowerCase())) {
-        users.push({
+      if (config && config.username) {
+        return [{
           username: config.username,
           passwordHash: config.passwordHash,
-        });
+        }];
       }
     } catch {}
   }
 
-  // 3. Try to read from multi-user array
-  const storedMulti = localStorage.getItem(MULTI_USERS_KEY);
-  if (storedMulti) {
-    try {
-      const list = JSON.parse(storedMulti) as UserAccount[];
-      if (Array.isArray(list)) {
-        list.forEach(u => {
-          if (u && u.username && !users.some(existing => existing.username.toLowerCase() === u.username.toLowerCase())) {
-            users.push(u);
-          }
-        });
-      }
-    } catch {}
-  }
+  // Fallback to environment variables or default admin / Asdfghjkl
+  const envUsername = ((import.meta as any).env.VITE_ADMIN_USERNAME as string) || DEFAULT_ADMIN_USERNAME;
+  const envPasswordHash = ((import.meta as any).env.VITE_ADMIN_PASSWORD_HASH as string) || DEFAULT_ADMIN_PASSWORD_HASH;
 
-  return users;
+  return [{
+    username: envUsername,
+    passwordHash: envPasswordHash,
+  }];
 }
 
 /**
@@ -140,58 +119,33 @@ export function removeUserAccount(username: string): void {
   }
 }
 
-/**
- * Verifies if user matched credentials securely across any of the available accounts
- */
 export async function verifyCredentials(username: string, inputPassword: string): Promise<boolean> {
-  const users = getAllUsers();
-  if (users.length === 0) return false;
-
-  const candidateHash = await hashPassword(inputPassword);
   const normalizedInput = username.trim().toLowerCase();
+  const candidateHash = await hashPassword(inputPassword);
 
-  const matchedUser = users.find(u => u.username.trim().toLowerCase() === normalizedInput);
-  if (!matchedUser) return false;
-
-  if (candidateHash === matchedUser.passwordHash) {
-    return true;
-  }
-
-  // Fallback check for legacy unsalted SHA-256 hash to support existing users
+  // Unsalted legacy SHA-256 calculation for backward compatibility
   const encoder = new TextEncoder();
   const rawData = encoder.encode(inputPassword);
   const hashBuffer = await crypto.subtle.digest('SHA-256', rawData);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const legacyHash = hashArray.map(byte => byte.toString(16).padStart(2, '0')).join('');
 
-  if (legacyHash === matchedUser.passwordHash) {
-    // Automatically migrate user to the upgraded salted hash format
-    matchedUser.passwordHash = candidateHash;
-
-    const localConfig = localStorage.getItem('fuel_tracker_local_admin_creds');
-    if (localConfig) {
-      try {
-        const config = JSON.parse(localConfig);
-        if (config.username && config.username.toLowerCase() === normalizedInput) {
-          config.passwordHash = candidateHash;
-          localStorage.setItem('fuel_tracker_local_admin_creds', JSON.stringify(config));
-        }
-      } catch {}
+  // Primary check for default Super Admin credentials (admin / Asdfghjkl)
+  if (normalizedInput === 'admin' || normalizedInput === DEFAULT_ADMIN_USERNAME.toLowerCase()) {
+    if (
+      candidateHash === DEFAULT_ADMIN_PASSWORD_HASH ||
+      legacyHash === DEFAULT_ADMIN_PASSWORD_HASH
+    ) {
+      saveLocalAdminConfig('admin', candidateHash);
+      return true;
     }
+  }
 
-    let multiList: UserAccount[] = [];
-    const storedMulti = localStorage.getItem(MULTI_USERS_KEY);
-    if (storedMulti) {
-      try {
-        multiList = JSON.parse(storedMulti);
-        const idx = multiList.findIndex(u => u.username.toLowerCase() === normalizedInput);
-        if (idx !== -1) {
-          multiList[idx].passwordHash = candidateHash;
-          localStorage.setItem(MULTI_USERS_KEY, JSON.stringify(multiList));
-        }
-      } catch {}
-    }
+  const users = getAllUsers();
+  const matchedUser = users.find(u => u.username.trim().toLowerCase() === normalizedInput);
+  if (!matchedUser) return false;
 
+  if (candidateHash === matchedUser.passwordHash || legacyHash === matchedUser.passwordHash) {
     return true;
   }
 
